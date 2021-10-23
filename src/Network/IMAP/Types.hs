@@ -4,7 +4,6 @@ import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.STM.RollingQueue as RQ
 import Control.Concurrent.STM.TVar (TVar)
--- import Data.DeriveTH
 
 import Control.Concurrent (ThreadId)
 import Control.Concurrent.STM.TQueue (TQueue)
