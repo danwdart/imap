@@ -17,7 +17,7 @@ import           Control.Monad                 (liftM)
 parseFetch :: Parser (Either ErrorMessage CommandResult)
 parseFetch = do
   string "* " <|> string "\r\n* "
-  msgId <- fmap toInt $ AP.takeWhile1 isDigit
+  msgId <- toInt <$> AP.takeWhile1 isDigit
   let msgId' = msgId >>= Right . MessageId
   string " FETCH ("
 

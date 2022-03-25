@@ -36,7 +36,7 @@ parseExtension = do
   extensionName <- AP.takeWhile1 isAtomChar
   char ' '
 
-  payload <- (liftA ExtLabels . Right <$>
+  payload <- (fmap ExtLabels . Right <$>
               (char '(' *> AP.sepBy parseLabel (char ' ') <* char ')')
              )
                 <|>
@@ -103,9 +103,9 @@ parseHighestModSeq = parseOkResp $ parseNumber HighestModSeq "HIGHESTMODSEQ" ""
 parseStatusItem :: Parser (Either ErrorMessage UntaggedResult)
 parseStatusItem = do
   anyChar
-  itemName <- fmap decodeUtf8 $ AP.takeWhile1 isAtomChar
+  itemName <- decodeUtf8 <$> AP.takeWhile1 isAtomChar
   char ' '
-  value <- fmap decodeUtf8 $ AP.takeWhile1 isDigit
+  value <- decodeUtf8 <$> AP.takeWhile1 isDigit
 
   let decodingError = T.concat ["Error decoding '", value, "' as integer"]
   let valAsNumber = mapBoth (const decodingError) fst $ TR.decimal value
@@ -121,7 +121,7 @@ parseStatusItem = do
 parseStatus :: Parser (Either ErrorMessage UntaggedResult)
 parseStatus = do
   string "STATUS "
-  mailboxName <- fmap decodeUtf8 $ AP.takeWhile1 isAtomChar
+  mailboxName <- decodeUtf8 <$> AP.takeWhile1 isAtomChar
 
   char ' '
   statuses <- parseStatusItem `manyTill` char ')'

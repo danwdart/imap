@@ -85,7 +85,7 @@ parseListLikeResp prefix = do
   string ") \""
   delimiter <- fmap (decodeUtf8 . BSC.singleton) AP.anyChar
   string "\" "
-  name <- fmap decodeUtf8 $ AP.takeWhile1 (/= '\r')
+  name <- decodeUtf8 <$> AP.takeWhile1 (/= '\r')
 
   let actualName = T.dropAround (== '"') name
   return $ ListR nameAttributes delimiter actualName

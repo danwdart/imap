@@ -78,7 +78,7 @@ instance {-# OVERLAPPING #-} Universe (ListT (S.StateT FakeState IO)) where
 instance HasFork (S.StateT FakeState IO) where
   fork em = S.StateT $ \s -> do
     defState <- def
-    threadId <- forkIO (S.runStateT em s >>= return . fst)
+    threadId <- forkIO (S.runStateT em s Data.Functor.<&> fst)
     return (threadId, defState)
 
 runFakeIOWithReply :: IMAPConnection -> T.Text -> T.Text -> ListT (StateT FakeState IO) a -> IO ([a], FakeState)

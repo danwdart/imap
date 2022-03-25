@@ -130,7 +130,7 @@ availableFlags = ["Answered", "Flagged", "Deleted", "Seen", "Draft"]
 instance Arbitrary AtomChar where
   arbitrary = do
     ch :: Char <- chr <$> choose (0,127)
-    if L.any (== ch) atomSpecials
+    if elem ch atomSpecials
       then arbitrary
       else return $ AtomChar ch
 
@@ -169,7 +169,7 @@ unparseEmailAddr (EmailAddress label route uname domain) =
                                 Just value -> B.concat ["\"", T.encodeUtf8 value, "\""]
 
 unparseFlags :: [Flag] -> B.ByteString
-unparseFlags parsedFlags = B.concat ["(", (B.intercalate " " unparsedFlags), ")"]
+unparseFlags parsedFlags = B.concat ["(", B.intercalate " " unparsedFlags, ")"]
   where unparsedFlags = map unparseFlag parsedFlags
         unparseFlag FSeen      = "\\Seen"
         unparseFlag FAnswered  = "\\Answered"
