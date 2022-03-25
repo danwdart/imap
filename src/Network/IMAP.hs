@@ -56,27 +56,27 @@ module Network.IMAP (
   simpleFormat
 ) where
 
-import Network.Connection
-import qualified Data.Text as T
-import Data.Text.Encoding (encodeUtf8)
-import qualified Data.ByteString.Char8 as BSC
+import qualified Data.ByteString.Char8         as BSC
+import qualified Data.Text                     as T
+import           Data.Text.Encoding            (encodeUtf8)
+import           Network.Connection
 
-import qualified Data.STM.RollingQueue as RQ
-import Control.Concurrent.STM.TQueue
-import Control.Concurrent.STM.TVar
-import Control.Monad.STM
-import Data.Maybe (isJust, fromJust)
+import           Control.Concurrent.STM.TQueue
+import           Control.Concurrent.STM.TVar
+import           Control.Monad.STM
+import           Data.Maybe                    (fromJust, fromMaybe, isJust)
+import qualified Data.STM.RollingQueue         as RQ
 
-import Control.Concurrent (forkIO, killThread)
+import           Control.Concurrent            (forkIO, killThread)
 
-import Network.IMAP.Types
-import Network.IMAP.RequestWatcher
-import Network.IMAP.Utils
+import           Network.IMAP.RequestWatcher
+import           Network.IMAP.Types
+import           Network.IMAP.Utils
 
-import Control.Monad (MonadPlus(..), when)
-import Control.Monad.IO.Class (MonadIO(..))
-import ListT (toList, ListT)
-import qualified Data.List as L
+import           Control.Monad                 (MonadPlus (..), when)
+import           Control.Monad.IO.Class        (MonadIO (..))
+import qualified Data.List                     as L
+import           ListT                         (ListT, toList)
 
 -- |Connects to the server and gives you a connection object
 --  that needs to be passed to any other command. You should only call it once
@@ -85,7 +85,7 @@ connectServer :: ConnectionParams -> Maybe IMAPSettings -> IO IMAPConnection
 connectServer connParams wrappedSettings = do
   context <- initConnectionContext
   connection <- connectTo context connParams
-  let settings = if isJust wrappedSettings then fromJust wrappedSettings else defaultImapSettings
+  let settings = fromMaybe defaultImapSettings wrappedSettings
 
   untaggedRespsQueue <- RQ.newIO $ untaggedQueueLength settings
   responseRequestsQueue <- newTQueueIO
@@ -146,7 +146,7 @@ startTLS conn tls = do
   case res of
     Tagged (TaggedResult _ resState _) -> when (resState == OK) $
       do
-        threadId <- liftIO . atomically . readTVar $ serverWatcherThread state
+        threadId <- liftIO . readTVarIO $ serverWatcherThread state
         liftIO . killThread . fromJust $ threadId
         liftIO $ connectionSetSecure (connectionContext state) (rawConnection state) tls
 
@@ -189,7 +189,7 @@ authenticate conn method authAction = do
   connectionPut' (rawConnection . imapState $ conn) commandLine
 
   -- kill the watcher thread
-  threadId <- liftIO . atomically . readTVar . serverWatcherThread $ state
+  threadId <- liftIO . readTVarIO . serverWatcherThread $ state
   liftIO . killThread . fromJust $ threadId
 
   authAction conn
@@ -267,8 +267,6 @@ append conn mailboxName message flagL dateTime = do
   let command = BSC.concat ["APPEND ", encodeUtf8 mailboxName, encodedFlags,
                             encodedDate, " {", BSC.pack . show . BSC.length $ message,
                             "}\r\n", message]
-
-  return ()
   sendCommand conn command
 
 -- |
@@ -353,7 +351,7 @@ simpleFormat action = do
   let
     hasBye = L.find (\i -> case i of
       Untagged u -> isBye u
-      Tagged _ -> False) results
+      Tagged _   -> False) results
 
   if isJust hasBye
     then return . Right $ map (\(Untagged u) -> u) $ filter isUntagged results
@@ -361,7 +359,7 @@ simpleFormat action = do
           Untagged _ -> return . Left $ "Last result is untagged, something went wrong"
           Tagged t -> case resultState t of
             OK -> return . Right $ map (\(Untagged u) -> u) (init results)
-            _ -> return . Left . resultRest $ t
+            _  -> return . Left . resultRest $ t
 
 oneParamCommand :: (MonadPlus m, MonadIO m, Universe m) => T.Text ->
   IMAPConnection -> T.Text -> m CommandResult

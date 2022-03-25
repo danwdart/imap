@@ -1,17 +1,18 @@
 module Network.IMAP.Types where
 
-import qualified Data.Text as T
-import qualified Data.ByteString.Char8 as BSC
-import qualified Data.STM.RollingQueue as RQ
-import Control.Concurrent.STM.TVar (TVar)
+import           Control.Concurrent.STM.TVar   (TVar)
+import qualified Data.ByteString.Char8         as BSC
+import qualified Data.STM.RollingQueue         as RQ
+import qualified Data.Text                     as T
 
-import Control.Concurrent (ThreadId)
-import Control.Concurrent.STM.TQueue (TQueue)
-import Network.Connection (Connection, ConnectionContext,
-  connectionPut, connectionGetChunk')
-import ListT (ListT)
-import Control.Monad.IO.Class (liftIO)
-import qualified Pipes as P
+import           Control.Concurrent            (ThreadId)
+import           Control.Concurrent.STM.TQueue (TQueue)
+import           Control.Monad.IO.Class        (liftIO)
+import           ListT                         (ListT)
+import           Network.Connection            (Connection, ConnectionContext,
+                                                connectionGetChunk',
+                                                connectionPut)
+import qualified Pipes                         as P
 
 -- |A type alias used for an error message
 type ErrorMessage = T.Text
@@ -36,25 +37,25 @@ data IMAPConnection = IMAPConnection {
   connectionState :: TVar ConnectionState,
   -- |Contains commands sent by the server which we didn't expect.
   --  Probably message and mailbox state updates
-  untaggedQueue :: RQ.RollingQueue UntaggedResult,
+  untaggedQueue   :: RQ.RollingQueue UntaggedResult,
   -- |Internal state of the library
-  imapState :: IMAPState
+  imapState       :: IMAPState
 }
 
 data IMAPState = IMAPState {
   -- |The actual connection with the server from
   --  Network.Connection. Only use if you know what you're doing
-  rawConnection :: !Connection,
+  rawConnection       :: !Connection,
   -- |Context from Network.Connection
-  connectionContext :: ConnectionContext,
+  connectionContext   :: ConnectionContext,
   -- |Contains requests for response that weren't yet read by the watcher thread.
-  responseRequests :: TQueue ResponseRequest,
+  responseRequests    :: TQueue ResponseRequest,
   -- |Id of the thread the watcher executes on
   serverWatcherThread :: TVar (Maybe ThreadId),
   -- |All the unfulfilled requests the watcher thread knows about
-  outstandingReqs :: TVar [ResponseRequest],
+  outstandingReqs     :: TVar [ResponseRequest],
   -- |Configuration settings
-  imapSettings :: IMAPSettings
+  imapSettings        :: IMAPSettings
 }
 
 type ParseResult = Either ErrorMessage CommandResult
@@ -69,16 +70,16 @@ data ResponseRequest = ResponseRequest {
 
 data IMAPSettings = IMAPSettings {
   -- Number of seconds after which request timeouts
-  imapTimeout :: Int,
+  imapTimeout         :: Int,
   -- Length of a queue containing messages we weren't expecting
   untaggedQueueLength :: Int
 }
 
 data EmailAddress = EmailAddress {
-  emailLabel :: Maybe T.Text,
-  emailRoute :: Maybe T.Text,
+  emailLabel    :: Maybe T.Text,
+  emailRoute    :: Maybe T.Text,
   emailUsername :: Maybe T.Text,
-  emailDomain :: Maybe T.Text
+  emailDomain   :: Maybe T.Text
 } deriving (Show, Eq)
 
 data Flag = FSeen
@@ -130,11 +131,11 @@ data Capability = CIMAP4
 -- |Always the last result of the command, contains it's metadata
 data TaggedResult = TaggedResult {
                       -- |Id of the command that completes
-                      commandId :: CommandId,
+                      commandId   :: CommandId,
                       -- |State returned by the server side
                       resultState :: !ResultState,
                       -- |Rest of the result, usually the human-readable part
-                      resultRest :: T.Text
+                      resultRest  :: T.Text
                     } deriving (Show, Eq)
 
 -- |Tagged results can be in on of these three states
@@ -163,12 +164,12 @@ data UntaggedResult = Flags [Flag] -- ^ A list of flags a mailbox has
                     | Capabilities [Capability] -- ^ What server advertises that it supports
                     -- |Response to the `LIST` command
                     | ListR {
-                      flags :: [NameAttribute], -- ^ flags that a mailbox has
+                      flags              :: [NameAttribute], -- ^ flags that a mailbox has
                       -- |Character sequence that marks a new level of hierarchy
                       --  in the inbox name (usually a slash)
                       hierarchyDelimiter :: T.Text,
                       -- |Name of the mailbox
-                      inboxName :: T.Text
+                      inboxName          :: T.Text
                     }
                     | Fetch [UntaggedResult] -- ^ Fetch response, contains many responses
                     -- |Status of a mailbox, will contain many different responses inside
@@ -177,14 +178,14 @@ data UntaggedResult = Flags [Flag] -- ^ A list of flags a mailbox has
                     | Search [Integer]
                     -- |A parsed ENVELOPE reply, prefixed to avoid name clashes
                     | Envelope {
-                      eDate :: Maybe T.Text,
-                      eSubject :: Maybe T.Text,
-                      eFrom :: Maybe [EmailAddress],
-                      eSender :: Maybe [EmailAddress],
-                      eReplyTo :: Maybe [EmailAddress],
-                      eTo :: Maybe [EmailAddress],
-                      eCC :: Maybe [EmailAddress],
-                      eBCC :: Maybe [EmailAddress],
+                      eDate      :: Maybe T.Text,
+                      eSubject   :: Maybe T.Text,
+                      eFrom      :: Maybe [EmailAddress],
+                      eSender    :: Maybe [EmailAddress],
+                      eReplyTo   :: Maybe [EmailAddress],
+                      eTo        :: Maybe [EmailAddress],
+                      eCC        :: Maybe [EmailAddress],
+                      eBCC       :: Maybe [EmailAddress],
                       eInReplyTo :: Maybe T.Text,
                       eMessageId :: Maybe T.Text
                     }
@@ -203,7 +204,7 @@ isStatusR, isSearch, isEnvelope, isInternalDate, isSize, isUnknown :: UntaggedRe
 isBody, isBodyStructure, isExtension :: UntaggedResult -> Bool
 
 isFlags (Flags _) = True; isFlags _ = False
-isExists (Exists{}) = True; isExists _ = False
+isExists Exists{} = True; isExists _ = False
 isExpunge (Expunge _) = True; isExpunge _ = False
 isBye Bye = True; isBye _ = False
 isHighestModSeq (HighestModSeq _) = True; isHighestModSeq _ = False
@@ -219,17 +220,17 @@ isOKResult (OKResult _) = True; isOKResult _ = False
 isNOResult (NOResult _) = True; isNOResult _ = False
 isBADResult (BADResult _) = True; isBADResult _ = False
 isCapabilities (Capabilities _) = True; isCapabilities _ = False
-isListR (ListR{}) = True; isListR _ = False
-isFetch (Fetch{}) = True; isFetch _ = False
-isStatusR (StatusR{}) = True; isStatusR _ = False
-isSearch (Search{}) = True; isSearch _ = False
-isEnvelope (Envelope{}) = True; isEnvelope _ = False
-isInternalDate (InternalDate{}) = True; isInternalDate _ = False
-isSize (Size{}) = True; isSize _ = False
-isUnknown (Unknown{}) = True; isUnknown _ = False
-isBody  (Body{}) = True; isBody _ = False
-isBodyStructure  (BodyStructure{}) = True; isBodyStructure _ = False
-isExtension  (Extension{}) = True; isExtension _ = False
+isListR ListR{} = True; isListR _ = False
+isFetch Fetch{} = True; isFetch _ = False
+isStatusR StatusR{} = True; isStatusR _ = False
+isSearch Search{} = True; isSearch _ = False
+isEnvelope Envelope{} = True; isEnvelope _ = False
+isInternalDate InternalDate{} = True; isInternalDate _ = False
+isSize Size{} = True; isSize _ = False
+isUnknown Unknown{} = True; isUnknown _ = False
+isBody  Body{} = True; isBody _ = False
+isBodyStructure  BodyStructure{} = True; isBodyStructure _ = False
+isExtension  Extension{} = True; isExtension _ = False
 
 data ExtensionPayload = ExtInt Integer | ExtLabels [BSC.ByteString]
   deriving (Show, Eq)
@@ -249,8 +250,8 @@ data CommandResult = Tagged TaggedResult | Untagged UntaggedResult
   deriving (Show, Eq)
 
 isTagged, isUntagged :: CommandResult -> Bool
-isTagged (Tagged{}) = True; isTagged _ = False
-isUntagged (Untagged{}) = True; isUntagged _ = False
+isTagged Tagged{} = True; isTagged _ = False
+isUntagged Untagged{} = True; isUntagged _ = False
 
 
 

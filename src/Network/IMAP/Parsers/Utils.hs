@@ -1,18 +1,18 @@
 module Network.IMAP.Parsers.Utils where
 
-import Network.IMAP.Types
+import           Network.IMAP.Types
 
+import           Control.Applicative              ((<|>))
+import           Control.Monad                    (liftM)
 import           Data.Attoparsec.ByteString.Char8
 import qualified Data.Attoparsec.ByteString.Char8 as AP
-import qualified Data.Text as T
-import           Data.Text.Encoding (decodeUtf8)
-import qualified Data.ByteString.Char8 as BSC
-import           Data.Either.Combinators (rightToMaybe)
-import           Control.Monad (liftM)
-import           Control.Applicative ((<|>))
+import qualified Data.ByteString.Char8            as BSC
+import           Data.Either.Combinators          (rightToMaybe)
+import qualified Data.Text                        as T
+import           Data.Text.Encoding               (decodeUtf8)
 
-import           Data.Set (Set)
-import qualified Data.Set as Set
+import           Data.Set                         (Set)
+import qualified Data.Set                         as Set
 
 eatUntilClosingParen :: Parser BSC.ByteString
 eatUntilClosingParen = scan 0 hadClosedAllParens <* char ')'
@@ -40,14 +40,14 @@ parseNString = do
 parseEmail :: Parser EmailAddress
 parseEmail = do
   char '('
-  label <- nilOrValue $ parseNString
+  label <- nilOrValue parseNString
   char ' '
-  route <- nilOrValue $ parseNString
+  route <- nilOrValue parseNString
   char ' '
 
-  username <- nilOrValue $ parseNString
+  username <- nilOrValue parseNString
   char ' '
-  domain <- nilOrValue $ parseNString
+  domain <- nilOrValue parseNString
   char ')'
 
   return $ EmailAddress label route username domain
@@ -69,12 +69,12 @@ parseNameAttribute = do
   string "\\"
   name <- AP.takeWhile1 isAtomChar
   return $ case name of
-          "Noinferiors" -> Noinferiors
-          "Noselect" -> Noselect
-          "Marked" -> Marked
-          "Unmarked" -> Unmarked
+          "Noinferiors"   -> Noinferiors
+          "Noselect"      -> Noselect
+          "Marked"        -> Marked
+          "Unmarked"      -> Unmarked
           "HasNoChildren" -> HasNoChildren
-          _ -> OtherNameAttr $ decodeUtf8 name
+          _               -> OtherNameAttr $ decodeUtf8 name
 
 parseListLikeResp :: BSC.ByteString -> Parser UntaggedResult
 parseListLikeResp prefix = do
@@ -83,9 +83,9 @@ parseListLikeResp prefix = do
   nameAttributes <- parseNameAttribute `sepBy` char ' '
 
   string ") \""
-  delimiter <- liftM (decodeUtf8 . BSC.singleton) AP.anyChar
+  delimiter <- fmap (decodeUtf8 . BSC.singleton) AP.anyChar
   string "\" "
-  name <- liftM decodeUtf8 $ AP.takeWhile1 (/= '\r')
+  name <- fmap decodeUtf8 $ AP.takeWhile1 (/= '\r')
 
   let actualName = T.dropAround (== '"') name
   return $ ListR nameAttributes delimiter actualName
@@ -114,9 +114,9 @@ parseNumber constructor prefix postfix = do
     then char ' ' *> string postfix
     else return BSC.empty
 
-  return $ liftM constructor (toInt parsedNumber)
+  return $ fmap constructor (toInt parsedNumber)
 
 parseLabel :: Parser BSC.ByteString
 parseLabel = parseQuoted <|>
              (char '\\' *> AP.takeWhile1 isAtomChar) <|>
-             (AP.takeWhile1 isAtomChar)
+             AP.takeWhile1 isAtomChar

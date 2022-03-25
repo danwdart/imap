@@ -1,18 +1,18 @@
 module Network.IMAP.Parsers where
 
-import Network.IMAP.Types
-import Network.IMAP.Parsers.Fetch
-import Network.IMAP.Parsers.Utils
-import Network.IMAP.Parsers.Untagged
+import           Network.IMAP.Parsers.Fetch
+import           Network.IMAP.Parsers.Untagged
+import           Network.IMAP.Parsers.Utils
+import           Network.IMAP.Types
 
 
-import Data.Attoparsec.ByteString
-import qualified Data.Attoparsec.ByteString as AP
-import Data.Word8
+import           Data.Attoparsec.ByteString
+import qualified Data.Attoparsec.ByteString    as AP
+import           Data.Word8
 
-import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding            as T
 
-import Control.Applicative
+import           Control.Applicative
 
 parseReply :: Parser (Either ErrorMessage CommandResult)
 parseReply = parseFetch <|> parseLine
@@ -37,10 +37,10 @@ parseTagged = do
 
   rest <- T.decodeUtf8 <$> takeWhile1 (/= _cr)
   let state = case commandState of
-                "OK" -> OK
-                "NO" -> NO
+                "OK"  -> OK
+                "NO"  -> NO
                 "BAD" -> BAD
-                _ -> BAD
+                _     -> BAD
 
   return . Right . Tagged $ TaggedResult requestId state rest
 

@@ -1,30 +1,30 @@
 module Network.IMAP.Parsers.Fetch where
 
-import           Network.IMAP.Types
+import           Network.IMAP.Parsers.Untagged (parseExtension, parseFlags)
 import           Network.IMAP.Parsers.Utils
-import           Network.IMAP.Parsers.Untagged (parseFlags, parseExtension)
+import           Network.IMAP.Types
 
 import           Data.Attoparsec.ByteString
-import qualified Data.Attoparsec.ByteString as AP
+import qualified Data.Attoparsec.ByteString    as AP
+import qualified Data.ByteString.Char8         as BSC
+import           Data.Maybe                    (fromJust, isNothing)
 import           Data.Word8
-import qualified Data.ByteString.Char8 as BSC
-import           Data.Maybe (fromJust, isNothing)
 
 import           Control.Applicative
-import           Control.Monad (liftM)
+import           Control.Monad                 (liftM)
 
 
 parseFetch :: Parser (Either ErrorMessage CommandResult)
 parseFetch = do
-  (string "* ") <|> (string "\r\n* ")
-  msgId <- liftM toInt $ AP.takeWhile1 isDigit
+  string "* " <|> string "\r\n* "
+  msgId <- fmap toInt $ AP.takeWhile1 isDigit
   let msgId' = msgId >>= Right . MessageId
   string " FETCH ("
 
   parsedFetch <- parseSpecifiers
 
   let allInOneEither = sequence $ msgId':parsedFetch
-  return $ liftM (Untagged . Fetch) allInOneEither
+  return $ fmap (Untagged . Fetch) allInOneEither
 
 parseSpecifiers :: Parser [Either ErrorMessage UntaggedResult]
 parseSpecifiers = do
@@ -45,7 +45,7 @@ parseSpecifiers = do
       (nextRes:) <$> (AP.anyWord8 *> parseSpecifiers)
 
 parseInternalDate :: Parser UntaggedResult
-parseInternalDate = liftM InternalDate $ string "INTERNALDATE " *> parseQuotedText
+parseInternalDate = fmap InternalDate $ string "INTERNALDATE " *> parseQuotedText
 
 parseBody :: Parser (Either ErrorMessage UntaggedResult)
 parseBody = do

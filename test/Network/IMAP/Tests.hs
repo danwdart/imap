@@ -1,42 +1,40 @@
 module Network.IMAP.Tests (tests) where
 
-import Network.IMAP
-import Network.IMAP.Types
-import Test.Utils
+import           Network.IMAP
+import           Network.IMAP.Types
+import           Test.Utils
 
-import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (testCase)
-import Test.Tasty.QuickCheck (testProperty)
-import Test.HUnit (Assertion, (@?=), assertFailure)
-import qualified Data.List as L
-import Data.Maybe (isJust, fromJust)
+import qualified Data.List                        as L
+import           Data.Maybe                       (fromJust, isJust)
+import           Test.HUnit                       (Assertion, assertFailure,
+                                                   (@?=))
+import           Test.Tasty                       (TestTree, testGroup)
+import           Test.Tasty.HUnit                 (testCase)
+import           Test.Tasty.QuickCheck            (testProperty)
 
-import qualified Data.ByteString.Char8 as B
-import qualified Network.IMAP.Parsers.Untagged as U
-import qualified Network.IMAP.Parsers.Utils as Utils
-import qualified Data.Text.Encoding as T
-import qualified Data.Text as T
+import           Control.Monad                    (liftM)
 import qualified Data.Attoparsec.ByteString.Char8 as A
-import Data.Either.Combinators (fromRight', isLeft)
-import Test.QuickCheck
-import qualified Data.List as L
-import Control.Monad (liftM)
-import Data.Char (ord, chr)
+import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (chr, ord)
+import           Data.Either.Combinators          (fromRight', isLeft)
+import qualified Data.Text                        as T
+import qualified Data.Text.Encoding               as T
+import qualified Network.IMAP.Parsers.Untagged    as U
+import qualified Network.IMAP.Parsers.Utils       as Utils
+import           Test.QuickCheck
 
 lastIsTagged :: [CommandResult] -> (TaggedResult -> Assertion) -> Assertion
 lastIsTagged responses testAction =
   case last responses of
     Untagged _ -> assertFailure "The last item should be tagged"
-    Tagged r -> testAction r
+    Tagged r   -> testAction r
 
 forUntagged :: [CommandResult] ->
   (UntaggedResult -> Bool) ->
   (UntaggedResult -> Assertion) ->
   Assertion
 forUntagged results resultTypeTest action = do
-    if isJust isResult then
-      action $ fromJust isResult
-      else assertFailure "Specified Untagged reply not found"
+    maybe (assertFailure "Specified Untagged reply not found") action isResult
   where onlyUntagged = map (\(Untagged u) -> u) $ filter isUntagged results
         isResult = L.find resultTypeTest onlyUntagged
 
@@ -65,14 +63,14 @@ testFlags = do
 
   lastIsTagged res $ \r -> resultState r @?= OK
   forUntagged res isFlags $ \(Flags f) -> do
-    (isJust $ L.find isFAnswered f) @?= True
-    (isJust $ L.find isFFlagged f) @?= True
-    (isJust $ L.find isFDraft f) @?= True
-    (isJust $ L.find isFDeleted f) @?= True
+    isJust (L.find isFAnswered f) @?= True
+    isJust (L.find isFFlagged f) @?= True
+    isJust (L.find isFDraft f) @?= True
+    isJust (L.find isFDeleted f) @?= True
 
     let otherFlags = map (\(FOther t) -> t) $ filter isFOther f
-    (isJust $ L.find (=="NonJunk") otherFlags) @?= True
-    (isJust $ L.find (=="$Phishing") otherFlags) @?= True
+    isJust (L.find (=="NonJunk") otherFlags) @?= True
+    isJust (L.find (=="$Phishing") otherFlags) @?= True
 
 testExists = do
   conn <- getConn
@@ -88,12 +86,12 @@ testRecent = do
 testSearch1 = do
   conn <- getConn
   (res, _) <- runFakeIOWithReply conn "* SEARCH 583551 3" "OK UID SEARCH completed" $ sendCommand conn "test"
-  forUntagged res isSearch $ \(Search r) -> (length r) @?= 2
+  forUntagged res isSearch $ \(Search r) -> length r @?= 2
 
 testSearch2 = do
   conn <- getConn
   (res, _) <- runFakeIOWithReply conn "* SEARCH" "OK UID SEARCH completed" $ sendCommand conn "test"
-  forUntagged res isSearch $ \(Search r) -> (length r) @?= 0
+  forUntagged res isSearch $ \(Search r) -> length r @?= 0
 
 testUnseen = do
   conn <- getConn
@@ -114,12 +112,12 @@ testPermFlags = do
     \ Flags permitted." "OK k" $ sendCommand conn "test"
   forUntagged res isPermanentFlags $ \(PermanentFlags flags) -> do
     length flags @?= 9
-    (isJust $ L.find isFAny flags) @?= True
-    (isJust $ L.find isFDeleted flags) @?= True
+    isJust (L.find isFAny flags) @?= True
+    isJust (L.find isFDeleted flags) @?= True
 
     let otherFlags = map (\(FOther t) -> t) $ filter isFOther flags
-    (isJust $ L.find (=="NonJunk") otherFlags) @?= True
-    (isJust $ L.find (=="$Phishing") otherFlags) @?= True
+    isJust (L.find (=="NonJunk") otherFlags) @?= True
+    isJust (L.find (=="$Phishing") otherFlags) @?= True
 
 newtype TestFlagList = TestFlagList B.ByteString deriving (Eq, Show)
 newtype Atom = Atom B.ByteString deriving (Eq, Show)
@@ -132,31 +130,29 @@ availableFlags = ["Answered", "Flagged", "Deleted", "Seen", "Draft"]
 instance Arbitrary AtomChar where
   arbitrary = do
     ch :: Char <- chr <$> choose (0,127)
-    if L.any (\c -> c == ch) atomSpecials
+    if L.any (== ch) atomSpecials
       then arbitrary
       else return $ AtomChar ch
 
 instance Arbitrary Atom where
   arbitrary = do
     howManyLetters :: Int <- choose (1,25)
-    chars <- map (\(AtomChar c) -> c) `liftM` mapM (\_ -> arbitrary) [1..howManyLetters]
+    chars <- map (\(AtomChar c) -> c) `fmap` mapM (const arbitrary) [1..howManyLetters]
     return . Atom $ B.pack chars
 
 instance Arbitrary TestFlagList where
   arbitrary = do
     howManyFlags :: Int <- choose (1,25)
-    flags <- map (\(Atom a) -> B.append "\\" a) `liftM` mapM (\_ -> arbitrary) [1..howManyFlags]
-    return . TestFlagList . B.concat $ ["(", (B.intercalate " " flags), ")"]
+    flags <- map (\(Atom a) -> B.append "\\" a) `fmap` mapM (const arbitrary) [1..howManyFlags]
+    return . TestFlagList . B.concat $ ["(", B.intercalate " " flags, ")"]
 
 newtype AddressPart = AddressPart B.ByteString
 instance Arbitrary AddressPart where
   arbitrary = do
     isNil :: Bool <- choose (False, True)
-    case isNil of
-      True -> return $ AddressPart "NIL"
-      False -> do
-        Atom atom <- arbitrary
-        return . AddressPart $ B.concat ["\"", atom, "\""]
+    if isNil then return $ AddressPart "NIL" else (do
+      Atom atom <- arbitrary
+      return . AddressPart $ B.concat ["\"", atom, "\""])
 
 newtype MockAddress = MockAddress B.ByteString deriving (Eq, Show)
 instance Arbitrary MockAddress where
@@ -173,27 +169,25 @@ unparseEmailAddr (EmailAddress label route uname domain) =
                                 Just value -> B.concat ["\"", T.encodeUtf8 value, "\""]
 
 unparseFlags :: [Flag] -> B.ByteString
-unparseFlags parsedFlags = B.concat $ ["(", (B.intercalate " " unparsedFlags), ")"]
-  where unparsedFlags = map (unparseFlag) parsedFlags
-        unparseFlag FSeen = "\\Seen"
-        unparseFlag FAnswered = "\\Answered"
-        unparseFlag FFlagged = "\\Flagged"
-        unparseFlag FDeleted = "\\Deleted"
-        unparseFlag FDraft = "\\Draft"
-        unparseFlag FRecent = "\\Recent"
-        unparseFlag FAny = "\\*"
+unparseFlags parsedFlags = B.concat ["(", (B.intercalate " " unparsedFlags), ")"]
+  where unparsedFlags = map unparseFlag parsedFlags
+        unparseFlag FSeen      = "\\Seen"
+        unparseFlag FAnswered  = "\\Answered"
+        unparseFlag FFlagged   = "\\Flagged"
+        unparseFlag FDeleted   = "\\Deleted"
+        unparseFlag FDraft     = "\\Draft"
+        unparseFlag FRecent    = "\\Recent"
+        unparseFlag FAny       = "\\*"
         unparseFlag (FOther f) = T.encodeUtf8 $ T.concat ["\\", f]
 
 testEmailParsing :: MockAddress -> Bool
 testEmailParsing (MockAddress addr) = case parsedAndUnparsed of
-    Left _ -> False
+    Left _    -> False
     Right val -> val == addr
   where parsedAndUnparsed = A.parseOnly Utils.parseEmail addr >>= Right . unparseEmailAddr
 
 testFlagParsing :: TestFlagList -> Bool
-testFlagParsing (TestFlagList flagList) = if isLeft parsedAndUnparsed
-    then False
-    else fromRight' parsedAndUnparsed == flagList
+testFlagParsing (TestFlagList flagList) = not (isLeft parsedAndUnparsed) && (fromRight' parsedAndUnparsed == flagList)
   where parsedAndUnparsed = A.parseOnly U.parseFlagList flagList >>= Right . unparseFlags
 
 tests :: TestTree

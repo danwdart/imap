@@ -1,36 +1,35 @@
 module Test.Utils where
 
-import Control.Concurrent.STM.TVar
-import Control.Monad.STM
-import Network.Connection
-import Network.Socket
-import Network.Socket.ByteString
-import Control.Monad.Trans.Class
-import GHC.Conc (threadStatus)
+import           Control.Concurrent.STM.TVar
+import           Control.Monad.STM
+import           Control.Monad.Trans.Class
+import           GHC.Conc                    (threadStatus)
+import           Network.Connection
+import           Network.Socket
+import           Network.Socket.ByteString
 
-import qualified Data.ByteString as BS
-import Control.Monad.State.Strict as S
+import           Control.Monad.State.Strict  as S
+import qualified Data.ByteString             as BS
 
-import Control.Concurrent.MVar
-import Control.Exception (catch, AsyncException, SomeException, throw)
+import           Control.Concurrent.MVar
+import           Control.Exception           (AsyncException, SomeException,
+                                              catch, throw)
 
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import qualified Data.Text as T
-import Network.IMAP.Types
-import ListT (ListT)
-import Control.Concurrent (threadDelay)
-import Network.IMAP.RequestWatcher (requestWatcher)
-import Network.IMAP (connectServer)
-import Control.Concurrent.MonadIO (fork, HasFork, fork, killThread)
-import Control.Concurrent (forkIO)
-import Data.Maybe (fromJust)
-import Control.Monad (void)
-import ListT (toList)
+import           Control.Concurrent          (forkIO, threadDelay)
+import           Control.Concurrent.MonadIO  (HasFork, fork, killThread)
+import           Control.Monad               (void)
+import           Data.Maybe                  (fromJust)
+import qualified Data.Text                   as T
+import           Data.Text.Encoding          (decodeUtf8, encodeUtf8)
+import           ListT                       (ListT, toList)
+import           Network.IMAP                (connectServer)
+import           Network.IMAP.RequestWatcher (requestWatcher)
+import           Network.IMAP.Types
 
 data FakeState = FS {
   bytesWritten :: TVar BS.ByteString,
-  bytesToRead :: TVar BS.ByteString,
-  reactToInput :: (BS.ByteString -> BS.ByteString)
+  bytesToRead  :: TVar BS.ByteString,
+  reactToInput :: BS.ByteString -> BS.ByteString
 }
 
 def :: IO FakeState
@@ -47,7 +46,7 @@ def = do
 testConnectionPut :: c -> BS.ByteString -> S.StateT FakeState IO ()
 testConnectionPut _ input = do
   st <- S.get
-  let toRead = (reactToInput st) input
+  let toRead = reactToInput st input
 
   liftIO . atomically $ do
     alreadyWritten <- readTVar $ bytesWritten st
@@ -60,7 +59,7 @@ testConnectionGetChunk c proc = do
   st <- S.get
   toRead <- liftIO . atomically $ do
     bytes <- readTVar . bytesToRead $ st
-    if (BS.length bytes) == 0 then retry else return bytes
+    if BS.length bytes == 0 then retry else return bytes
 
   lift $ threadDelay 10000
   let (result, left) = proc toRead
@@ -79,13 +78,13 @@ instance {-# OVERLAPPING #-} Universe (ListT (S.StateT FakeState IO)) where
 instance HasFork (S.StateT FakeState IO) where
   fork em = S.StateT $ \s -> do
     defState <- def
-    threadId <- forkIO $ (S.runStateT em s >>= return . fst)
+    threadId <- forkIO (S.runStateT em s >>= return . fst)
     return (threadId, defState)
 
 runFakeIOWithReply :: IMAPConnection -> T.Text -> T.Text -> ListT (StateT FakeState IO) a -> IO ([a], FakeState)
 runFakeIOWithReply conn prefix reply action = do
   defState <- def
-  runFakeIO defState {reactToInput = respond prefix reply} $ withWatcher conn $ action
+  runFakeIO defState {reactToInput = respond prefix reply} $ withWatcher conn action
 
 data WaitFlag = WaitFlag
 
@@ -102,7 +101,7 @@ mockServer port waitMVar killMVar = (do
   (acceptedSocket, _) <- accept recvSocket
   void $ Network.Socket.ByteString.recv acceptedSocket 4096
   ) `catch` (
-    \e -> return (e :: AsyncException) >> void (tryPutMVar killMVar WaitFlag))
+    \(e :: SomeException) -> void (tryPutMVar killMVar WaitFlag))
 
 withMockServer :: IO a -> IO a
 withMockServer action = do
@@ -124,7 +123,7 @@ getConn = withMockServer $ do
 
   conn <- connectServer params Nothing
   let state = imapState conn
-  threadId <- atomically . readTVar $ serverWatcherThread state
+  threadId <- readTVarIO $ serverWatcherThread state
   killThread . fromJust $ threadId
 
   atomically $ writeTVar (serverWatcherThread state) Nothing
@@ -139,7 +138,7 @@ respond prefix response input =
   where commandId = head . T.splitOn " " $ decodeUtf8 input
 
 withWatcher :: IMAPConnection -> ListT (StateT FakeState IO) a -> StateT FakeState IO [a]
-withWatcher conn action = withWatcher' conn action
+withWatcher = withWatcher'
 
 withWatcher' :: IMAPConnection -> ListT (StateT FakeState IO) a -> StateT FakeState IO [a]
 withWatcher' conn action = do

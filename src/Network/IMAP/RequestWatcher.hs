@@ -1,32 +1,32 @@
 module Network.IMAP.RequestWatcher (requestWatcher) where
 
-import Network.IMAP.Types
-import Network.IMAP.Parsers
+import           Network.IMAP.Parsers
+import           Network.IMAP.Types
 
-import Data.Maybe (isJust, fromJust)
+import           Data.Maybe                    (fromJust, isJust)
 
-import Network.Connection
-import Data.Attoparsec.ByteString
-import qualified Data.Attoparsec.ByteString as AP
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BSC
+import           Data.Attoparsec.ByteString
+import qualified Data.Attoparsec.ByteString    as AP
+import qualified Data.ByteString               as BS
+import qualified Data.ByteString.Char8         as BSC
+import           Network.Connection
 
-import qualified Data.List as L
-import qualified Data.Text as T
+import qualified Data.List                     as L
+import qualified Data.Text                     as T
 
-import qualified Data.STM.RollingQueue as RQ
-import Control.Concurrent.STM.TQueue
-import Control.Concurrent.STM.TVar
-import Control.Concurrent (killThread)
-import Control.Monad.STM
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Exception (SomeException)
-import qualified Control.Monad.Catch as C
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad (when)
-import Data.Foldable (forM_)
+import           Control.Concurrent            (killThread)
+import           Control.Concurrent.STM.TQueue
+import           Control.Concurrent.STM.TVar
+import           Control.Exception             (SomeException)
+import           Control.Monad                 (when)
+import           Control.Monad.Catch           (MonadCatch)
+import qualified Control.Monad.Catch           as C
+import           Control.Monad.IO.Class        (MonadIO, liftIO)
+import           Control.Monad.STM
+import           Data.Foldable                 (forM_)
+import qualified Data.STM.RollingQueue         as RQ
 
-import System.Log.Logger (errorM)
+import           System.Log.Logger             (errorM)
 
 
 requestWatcher :: (MonadIO m, Universe m, MonadCatch m) => IMAPConnection -> m ()
@@ -52,7 +52,7 @@ reactToReply conn parsedReply = do
     Right reply -> do
       updateConnState conn reply
       case reply of
-        Tagged t -> dispatchTagged requests t
+        Tagged t   -> dispatchTagged requests t
         Untagged u -> dispatchUntagged conn requests u
 
   liftIO . atomically $ writeTVar (outstandingReqs state) pendingReqs
@@ -71,8 +71,8 @@ updateConnState conn command = do
 
 shouldIDie :: (MonadIO m) => IMAPConnection -> m ()
 shouldIDie conn = liftIO $ do
-  threadId <- atomically . readTVar . serverWatcherThread . imapState $ conn
-  connState <- atomically . readTVar $ connectionState conn
+  threadId <- readTVarIO . serverWatcherThread . imapState $ conn
+  connState <- readTVarIO $ connectionState conn
 
   when (isDisconnected connState && isJust threadId) $
     killThread $ fromJust threadId
@@ -102,7 +102,7 @@ dispatchTagged requests response = do
 
   liftIO $ case pendingRequest of
     Just req -> atomically $ writeTQueue (responseQueue req) $ Tagged response
-    Nothing -> return ()
+    Nothing  -> return ()
 
   return $ if isJust pendingRequest
             then filter (/= fromJust pendingRequest) requests
@@ -160,7 +160,7 @@ getParsedChunk conn parser = do
 
   case cont of
     Just continuation -> getParsedChunk conn continuation
-    Nothing -> return . fromJust $ parsed
+    Nothing           -> return . fromJust $ parsed
 
 -- |Reject all outstanding requests with the exception handler, close the watcher
 handleExceptions :: (MonadIO m) => IMAPConnection ->
