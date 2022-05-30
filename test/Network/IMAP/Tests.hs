@@ -130,7 +130,7 @@ availableFlags = ["Answered", "Flagged", "Deleted", "Seen", "Draft"]
 instance Arbitrary AtomChar where
   arbitrary = do
     ch :: Char <- chr <$> choose (0,127)
-    if elem ch atomSpecials
+    if ch `elem` atomSpecials
       then arbitrary
       else return $ AtomChar ch
 
